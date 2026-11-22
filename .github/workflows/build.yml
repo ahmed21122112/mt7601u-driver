@@ -16,54 +16,43 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential bc bison flex libssl-dev libelf-dev dwarves cpio python3 git wget curl
 
-      - name: Download Clang 14 (r450784e) & Kernel Source
+      - name: Download Clang 14 and Kernel Source
         run: |
           mkdir -p toolchain kernel
-          git clone --depth=1 -b android13-release https://googlesource.com toolchain/clang
-          git clone --depth=1 -b android13-5.15 https://googlesource.com kernel/src
+          git clone --depth=1 -b android13-release https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 toolchain/clang
+          git clone --depth=1 -b android13-5.15 https://android.googlesource.com/kernel/common kernel/src
 
       - name: Configure and Build Modules
         run: |
           export PATH="$PWD/toolchain/clang/clang-r450784e/bin:$PATH"
           cd kernel/src
 
-          # ضبط رقم الإصدار والتوقيع الدقيق ليطابق نواة هاتفك 100%
           sed -i 's/^SUBLEVEL = .*/SUBLEVEL = 197/' Makefile
           sed -i 's/^EXTRAVERSION = .*/EXTRAVERSION = -android13-8-o-g00d4e8e246c3/' Makefile
 
-          # تجهيز الإعدادات الأساسية لنواة GKI ARM64
           make ARCH=arm64 LLVM=1 LLVM_IAS=1 gki_defconfig
-
-          # تفعيل الوحدات المطلوبة كـ Modules (m)
           ./scripts/config --module CONFIG_CFG80211
           ./scripts/config --enable CONFIG_CFG80211_WEXT
           ./scripts/config --module CONFIG_MAC80211
           ./scripts/config --module CONFIG_MT7601U
-
-          # إيقاف التحقق الصارم من التوقيع أو البصمة لسهولة الحقن
           ./scripts/config --disable CONFIG_MODULE_SIG_FORCE
-          ./scripts/config --disable CONFIG_MODVERSIONS
+          ./scripts/config --disable CONFIG_MODVERV�IONS
+          make TRADITIONAL=1 ARCH=arm64 LLVM=1 LLVM_IAS=1 olddefconfig
 
-          make ARCH=arm64 LLVM=1 LLVM_IAS=1 olddefconfig
-
-          # بناء التجهيزات الأساسية ثم الوحدات الثلاث فقط
           make ARCH=arm64 LLVM=1 LLVM_IAS=1 -j$(nproc) modules_prepare
           make ARCH=arm64 LLVM=1 LLVM_IAS=1 -j$(nproc) M=net/wireless modules
           make ARCH=arm64 LLVM=1 LLVM_IAS=1 -j$(nproc) M=net/mac80211 modules
           make ARCH=arm64 LLVM=1 LLVM_IAS=1 -j$(nproc) M=drivers/net/wireless/mediatek/mt7601u modules
 
-      - name: Collect Modules & Firmware
+      - name: Collect Modules and Firmware
         run: |
           mkdir -p output
           find kernel/src -name "cfg80211.ko" -exec cp {} output/ \;
           find kernel/src -name "mac80211.ko" -exec cp {} output/ \;
+          find kernel/src -name "mt7601U.ko" -exec cp {} output/ \;
           find kernel/src -name "mt7601u.ko" -exec cp {} output/ \;
-
-          # تنظيف رموز التصحيح لتصغير الحجم وتسريع الحقن
           ./toolchain/clang/clang-r450784e/bin/llvm-strip --strip-debug output/*.ko
-
-          # تحميل ملف الفيرموير الرسمي من مستودع Linux Firmware
-          wget -O output/mt7601u.bin https://kernel.org
+          wget -O output/mt7601u.bin https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/mt7601U.bin || wget -O output/mt7601U.bin https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/mt7601u.bin
           ls -lh output/
 
       - name: Upload Driver Package
