@@ -15,7 +15,7 @@ jobs:
       - name: Download Clang 14 (r450784e) & Kernel Source
         run: |
           git clone --depth=1 -b android13-release https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 clang-repo
-          mv clang-repo/clang-r450784e clang
+          mv clang-repo/clang-r450784* clang
           rm -rf clang-repo
           git init kernel && cd kernel
           git remote add origin https://android.googlesource.com/kernel/common
