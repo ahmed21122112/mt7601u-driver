@@ -1,0 +1,55 @@
+name: Build MT7601U GKI Module
+on: [workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential bc bison flex libssl-dev libelf-dev dwarves cpio git curl python3
+
+      - name: Download Clang 14 (r450784e) & Kernel Source
+        run: |
+          git clone --depth=1 -b android13-release https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 clang-repo
+          mv clang-repo/clang-r450784* clang
+          rm -rf clang-repo
+          git init kernel && cd kernel
+          git remote add origin https://android.googlesource.com/kernel/common
+          git fetch --depth 1 origin 00d4e8e246c3
+          git checkout FETCH_HEAD
+
+      - name: Configure and Build Modules
+        run: |
+          cp kernel_config.txt kernel/.config
+          cd kernel
+          scripts/config --set-str SYSTEM_TRUSTED_KEYS ""
+          scripts/config --set-str SYSTEM_REVOCATION_KEYS ""
+          scripts/config -m CFG80211
+          scripts/config -m MAC80211
+          scripts/config -m MT7601U
+          scripts/config -d LTO_CLANG_THIN
+          scripts/config -d LTO_CLANG_FULL
+          export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
+          make ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 olddefconfig
+          make ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 -j$(nproc) modules_prepare
+          make ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 -j$(nproc) M=net/wireless modules
+          make ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 -j$(nproc) M=net/mac80211 modules
+          make ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 -j$(nproc) M=drivers/net/wireless/mediatek/mt7601u modules
+
+      - name: Collect Modules & Firmware
+        run: |
+          mkdir -p out
+          cp kernel/net/wireless/cfg80211.ko out/
+          cp kernel/net/mac80211/mac80211.ko out/
+          cp kernel/drivers/net/wireless/mediatek/mt7601u/mt7601u.ko out/
+          curl -sL https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/mt7601u.bin -o out/mt7601u.bin
+
+      - name: Upload Driver Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: mt7601u-oppo-driver
+          path: out/*
