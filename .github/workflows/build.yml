@@ -14,11 +14,11 @@ jobs:
 
       - name: Download Clang 14 (r450784e) & Kernel Source
         run: |
-          git clone --depth=1 -b android13-release https://googlesource.com clang-repo
+          git clone --depth=1 -b android13-release https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 clang-repo
           mv clang-repo/clang-r450784e clang
           rm -rf clang-repo
           git init kernel && cd kernel
-          git remote add origin https://googlesource.com
+          git remote add origin https://android.googlesource.com/kernel/common
           git fetch --depth 1 origin 00d4e8e246c3
           git checkout FETCH_HEAD
 
@@ -46,7 +46,7 @@ jobs:
           cp kernel/net/wireless/cfg80211.ko out/
           cp kernel/net/mac80211/mac80211.ko out/
           cp kernel/drivers/net/wireless/mediatek/mt7601u/mt7601u.ko out/
-          curl -sL https://kernel.org -o out/mt7601u.bin
+          curl -sL https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/mt7601u.bin -o out/mt7601u.bin
 
       - name: Upload Driver Package
         uses: actions/upload-artifact@v4
